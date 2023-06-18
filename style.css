@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,300;0,700;1,700&display=swap");
+
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -19,20 +21,9 @@
 }
 body,
 html {
+  font-family: "Hanken Grotesk", sans-serif;
   color: var(--color-dark);
   overflow: hidden;
-}
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  /* font-style: italic; */
-  font-weight: 700;
-  line-height: 1;
-  margin-block-start: 0px;
-  margin-block-end: 0px;
 }
 
 p {
@@ -55,43 +46,28 @@ canvas {
   z-index: -1;
 }
 
-.header,
-.links {
-  position: absolute;
-  width: fit-content;
-}
 .header {
-  top: 2%;
-  left: 2%;
+  position: absolute;
+  top: 5%;
+  left: 3%;
+  width: 400px;
   display: grid;
-  grid-template-columns: auto auto;
-  gap: 2rem;
+  grid-template-columns: auto;
+  grid-template-rows: auto auto auto auto;
 }
-.heading {
-  font-size: 4rem;
+.bio {
+  font-style: italic;
 }
 
-.bio {
-  padding: 1.5%;
+.bio,
+.link {
+  margin-bottom: 1.5%;
   font-size: 1rem;
   font-weight: 700;
-  min-width: fit-content;
-  font-style: italic;
 }
 
 .bio-link {
   font-style: normal;
-}
-
-.links {
-  bottom: 2.5%;
-  left: 2%;
-  display: grid;
-  grid-template-columns: 1fr;
-}
-
-.link {
-  font-size: 2rem;
 }
 /* .link:hover {
   transform: scale(1.01);
