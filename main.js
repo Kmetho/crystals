@@ -85,22 +85,6 @@ Array(400)
     scene.add(star);
   });
 
-// core
-// const core = new THREE.Mesh(
-//   new THREE.SphereGeometry(0.2, 24, 24),
-//   new THREE.MeshStandardMaterial({
-//     color: 0xe7e2da,
-//     emissive: 0x000fe7,
-//     roughness: 0,
-//     metalness: 1,
-//     flatShading: true,
-//     vertexColors: true,
-//     fog: true,
-//   })
-// );
-// scene.add(core);
-
-
 // crystals
 let materials = [
   new THREE.MeshStandardMaterial({
@@ -114,7 +98,7 @@ let materials = [
   }),
 
   new THREE.MeshStandardMaterial({
-    color: 0xDFD9E2,
+    color: 0xdfd9e2,
     emissive: 0x2a7f62,
     roughness: 0,
     metalness: 1,
@@ -125,7 +109,7 @@ let materials = [
 
   new THREE.MeshStandardMaterial({
     color: 0xe7d29a,
-    emissive: 0xB497D6,
+    emissive: 0xb497d6,
     roughness: 0,
     metalness: 1,
     flatShading: true,
@@ -154,8 +138,8 @@ let materials = [
   }),
 
   new THREE.MeshStandardMaterial({
-    color: 0xD1B1CB,
-    emissive: 0xF90093,
+    color: 0xd1b1cb,
+    emissive: 0xf90093,
     roughness: 0,
     metalness: 1,
     flatShading: true,
@@ -175,7 +159,7 @@ let materials = [
 
   new THREE.MeshStandardMaterial({
     color: 0x9dc1e7,
-    emissive: 0x69DDFF,
+    emissive: 0x69ddff,
     roughness: 0,
     metalness: 1,
     flatShading: true,
@@ -196,7 +180,7 @@ let loader = new GLTFLoader();
 crystals.forEach((element, index) => {
   let material = materials[index];
   loader.load(
-    "/action/" + element + ".glb",
+    "/glb/" + element + ".glb",
     function (gltf) {
       gltf.scene.traverse(function (node) {
         if (node.isMesh) {
@@ -216,19 +200,6 @@ crystals.forEach((element, index) => {
     }
   );
 });
-
-// clouds
-loader.load(
-  "/cloud/cloud.glb",
-  function (gltf) {
-    const cloud = gltf.scene;
-    scene.add(cloud);
-  },
-  undefined,
-  function (error) {
-    console.log(error);
-  }
-);
 
 // loop
 const clock = new THREE.Clock();
