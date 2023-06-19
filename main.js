@@ -39,7 +39,7 @@ controls.screenSpacePanning = false;
 
 controls.minDistance = 16;
 controls.maxDistance = 50;
-controls.zoomSpeed = -1;
+// controls.zoomSpeed = -1;
 
 controls.maxPolarAngle = Math.PI / 2;
 
@@ -48,11 +48,6 @@ const pointLight = new THREE.PointLight(0xffffff);
 pointLight.position.set(5, 5, 5);
 const ambientLight = new THREE.AmbientLight(0xffffff);
 scene.add(pointLight, ambientLight);
-
-// // helpers
-// const lightHelper = new THREE.PointLightHelper(pointLight);
-// const gridHelper = new THREE.GridHelper(200, 50);
-// scene.add(lightHelper, gridHelper);
 
 // bg
 const bg = new THREE.TextureLoader().load("/images/bg.png");
