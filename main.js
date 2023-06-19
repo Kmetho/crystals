@@ -33,6 +33,7 @@ controls.listenToKeyEvents(window); // optional
 
 controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
 controls.dampingFactor = 0.05;
+controls.enablePan = false;
 
 controls.screenSpacePanning = false;
 
@@ -85,12 +86,20 @@ Array(400)
   });
 
 // core
+// const core = new THREE.Mesh(
+//   new THREE.SphereGeometry(0.2, 24, 24),
+//   new THREE.MeshStandardMaterial({
+//     color: 0xe7e2da,
+//     emissive: 0x000fe7,
+//     roughness: 0,
+//     metalness: 1,
+//     flatShading: true,
+//     vertexColors: true,
+//     fog: true,
+//   })
+// );
+// scene.add(core);
 
-const core = new THREE.Mesh(
-  new THREE.SphereGeometry(0.2, 24, 24),
-  new THREE.MeshStandardMaterial({ color: 0x000000 })
-);
-scene.add(core);
 
 // crystals
 let materials = [
@@ -105,8 +114,8 @@ let materials = [
   }),
 
   new THREE.MeshStandardMaterial({
-    color: 0x1e00c4,
-    emissive: 0x5700e7,
+    color: 0xDFD9E2,
+    emissive: 0x2a7f62,
     roughness: 0,
     metalness: 1,
     flatShading: true,
@@ -116,7 +125,7 @@ let materials = [
 
   new THREE.MeshStandardMaterial({
     color: 0xe7d29a,
-    emissive: 0x0b0b0b,
+    emissive: 0xB497D6,
     roughness: 0,
     metalness: 1,
     flatShading: true,
@@ -145,8 +154,8 @@ let materials = [
   }),
 
   new THREE.MeshStandardMaterial({
-    color: 0xb4895a,
-    emissive: 0x684f31,
+    color: 0xD1B1CB,
+    emissive: 0xF90093,
     roughness: 0,
     metalness: 1,
     flatShading: true,
@@ -166,7 +175,7 @@ let materials = [
 
   new THREE.MeshStandardMaterial({
     color: 0x9dc1e7,
-    emissive: 0x001be7,
+    emissive: 0x69DDFF,
     roughness: 0,
     metalness: 1,
     flatShading: true,
