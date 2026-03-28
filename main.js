@@ -1,7 +1,17 @@
 import "./style.css";
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+// Post-processing imports
+// EffectComposer manages the chain of passes (think of it like a pipeline)
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+// RenderPass renders the scene into the pipeline (instead of directly to screen)
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+// The bloom effect itself — makes bright things glow
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+// OutputPass handles final color space conversion (sRGB etc.)
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
 // setup
 const scene = new THREE.Scene();
@@ -21,7 +31,35 @@ camera.position.setZ(50);
 
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-scene.fog = new THREE.FogExp2(0xffffff, 0.05);
+// === POST-PROCESSING SETUP ===
+// The composer replaces renderer.render() — it runs the scene through a chain of effects
+const composer = new EffectComposer(renderer);
+
+// Step 1: Render the scene (same as before, but into the pipeline)
+const renderPass = new RenderPass(scene, camera);
+composer.addPass(renderPass);
+
+// Step 2: Bloom effect
+// Arguments: resolution (Vector2), strength, radius, threshold
+// - strength: how intense the glow is (start low, 0.4-1.5 is a good range)
+// - radius: how far the glow spreads
+// - threshold: brightness cutoff — pixels brighter than this will bloom
+//   (0 = everything blooms a bit, 1 = only pure white blooms)
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.8,  // strength — visible but not overwhelming
+  0.4,  // radius
+  0.95  // threshold — very high so only the brightest emissive parts glow, white bg stays clean
+);
+composer.addPass(bloomPass);
+
+// Step 3: Output pass (handles sRGB color conversion at the end)
+const outputPass = new OutputPass();
+composer.addPass(outputPass);
+
+// FogExp2(color, density) — lower density = fog kicks in further away
+// 0.05 was too thick, making nearby crystals hazy. 0.02 keeps distant fade but clears up close objects.
+scene.fog = new THREE.FogExp2(0xffffff, 0.02);
 
 // setting controls
 
@@ -44,9 +82,12 @@ controls.maxDistance = 50;
 controls.maxPolarAngle = Math.PI / 2;
 
 // light
-const pointLight = new THREE.PointLight(0xffffff);
+// PointLight has a second argument: intensity (default 1). Let's keep it strong for highlights.
+const pointLight = new THREE.PointLight(0xffffff, 1);
 pointLight.position.set(5, 5, 5);
-const ambientLight = new THREE.AmbientLight(0xffffff);
+// AmbientLight: second arg is intensity. At 1.0 it washes out metallic materials.
+// Lower values let the point light create contrast and make the crystals pop.
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
 scene.add(pointLight, ambientLight);
 
 // bg
@@ -165,7 +206,10 @@ let materials = [
 
 materials.forEach((element) => {
   element.envMap = cubeMap;
-  element.envMapIntensity = 1;
+  // envMapIntensity controls how much the cube map reflections contribute to the surface.
+  // At 1.0 with metalness=1, the reflections dominate and wash out the colors.
+  // Lowering it lets the emissive and base colors come through.
+  element.envMapIntensity = 0.4;
 });
 
 let crystals = ["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"];
@@ -197,17 +241,21 @@ crystals.forEach((element, index) => {
 });
 
 // loop
-const clock = new THREE.Clock();
+// THREE.Clock is deprecated in newer Three.js — THREE.Timer is the replacement
+// Timer is more precise and doesn't auto-start, giving you more control
+const timer = new THREE.Timer();
 function animate() {
   requestAnimationFrame(animate);
-  const delta = clock.getDelta();
+  timer.update();
+  const delta = timer.getDelta();
   mixers.forEach((mixer) => {
     mixer && mixer.update(delta);
   });
 
   controls.update();
 
-  renderer.render(scene, camera);
+  // Use the composer instead of renderer directly — this runs the bloom pipeline
+  composer.render();
 }
 
 animate();
@@ -215,4 +263,6 @@ window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  // The composer also needs to know about the new size, otherwise bloom renders at the old resolution
+  composer.setSize(window.innerWidth, window.innerHeight);
 });

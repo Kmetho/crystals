@@ -70,9 +70,7 @@ canvas {
 .bio-link {
   font-style: normal;
 }
-/* .link:hover {
-  transform: scale(1.01);
-} */
+
 .underline {
   display: inline-block;
   position: relative;
