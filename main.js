@@ -87,7 +87,7 @@ const pointLight = new THREE.PointLight(0xffffff, 1);
 pointLight.position.set(5, 5, 5);
 // AmbientLight: second arg is intensity. At 1.0 it washes out metallic materials.
 // Lower values let the point light create contrast and make the crystals pop.
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.05);
 scene.add(pointLight, ambientLight);
 
 // bg
@@ -122,10 +122,12 @@ Array(400)
   });
 
 // crystals
+// Crystal materials — darkened base colors so they're visible against the white bg.
+// The emissive color is what "self-illuminates" and gets picked up by bloom on hover.
 let materials = [
   new THREE.MeshStandardMaterial({
-    color: 0xe7e2da,
-    emissive: 0x000fe7,
+    color: 0x8a85a0,     // was 0xe7e2da — too close to white
+    emissive: 0x0020ff,   // was 0x000fe7 — bumped blue for visibility
     roughness: 0,
     metalness: 1,
     flatShading: true,
@@ -134,7 +136,7 @@ let materials = [
   }),
 
   new THREE.MeshStandardMaterial({
-    color: 0xdfd9e2,
+    color: 0x7a8a7e,     // was 0xdfd9e2
     emissive: 0x2a7f62,
     roughness: 0,
     metalness: 1,
@@ -144,7 +146,7 @@ let materials = [
   }),
 
   new THREE.MeshStandardMaterial({
-    color: 0xe7d29a,
+    color: 0x9a7a4a,     // was 0xe7d29a
     emissive: 0xb497d6,
     roughness: 0,
     metalness: 1,
@@ -154,7 +156,7 @@ let materials = [
   }),
 
   new THREE.MeshStandardMaterial({
-    color: 0x77feff,
+    color: 0x3a9a9b,     // was 0x77feff — toned down cyan
     emissive: 0x949494,
     roughness: 0,
     metalness: 1,
@@ -164,8 +166,8 @@ let materials = [
   }),
 
   new THREE.MeshStandardMaterial({
-    color: 0x1a00e7,
-    emissive: 0x000000,
+    color: 0x1a00e7,     // already dark — keeping as is
+    emissive: 0x1a0a6e,   // was 0x000000 — gave it some glow so it doesn't vanish
     roughness: 0,
     metalness: 1,
     flatShading: true,
@@ -174,7 +176,7 @@ let materials = [
   }),
 
   new THREE.MeshStandardMaterial({
-    color: 0xd1b1cb,
+    color: 0x8a5a7a,     // was 0xd1b1cb
     emissive: 0xf90093,
     roughness: 0,
     metalness: 1,
@@ -184,7 +186,7 @@ let materials = [
   }),
 
   new THREE.MeshStandardMaterial({
-    color: 0xfffffd,
+    color: 0x9a8abf,     // was 0xfffffd — way too white
     emissive: 0x8a00e7,
     roughness: 0,
     metalness: 1,
@@ -194,7 +196,7 @@ let materials = [
   }),
 
   new THREE.MeshStandardMaterial({
-    color: 0x9dc1e7,
+    color: 0x4a7a9a,     // was 0x9dc1e7
     emissive: 0x69ddff,
     roughness: 0,
     metalness: 1,
@@ -212,6 +214,31 @@ materials.forEach((element) => {
   element.envMapIntensity = 0.4;
 });
 
+// === RAYCASTING SETUP ===
+// Raycaster shoots an invisible ray from the camera through the mouse position.
+// We use it to detect which crystal the user is hovering over.
+const raycaster = new THREE.Raycaster();
+// Mouse coordinates in "normalized device coordinates" (NDC):
+// x and y go from -1 to +1 (center of screen = 0,0)
+// Three.js needs this format, not pixel coordinates.
+const mouse = new THREE.Vector2();
+
+// We'll collect all crystal meshes here so raycaster knows what to test against
+const crystalMeshes = [];
+// Store original emissive colors so we can restore them after hover
+const originalEmissives = new Map();
+// Track what we're currently hovering so we know when the mouse leaves
+let hoveredObject = null;
+
+window.addEventListener("mousemove", (event) => {
+  // Convert pixel coords to NDC (-1 to +1)
+  // event.clientX goes 0 → window.innerWidth, we need -1 → +1
+  // event.clientY goes 0 (top) → window.innerHeight (bottom), but NDC y is +1 (top) → -1 (bottom)
+  // That's why we negate the y!
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+});
+
 let crystals = ["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"];
 let mixers = [];
 let loader = new GLTFLoader();
@@ -224,6 +251,9 @@ crystals.forEach((element, index) => {
       gltf.scene.traverse(function (node) {
         if (node.isMesh) {
           node.material = material;
+          // Collect this mesh for raycasting and save its original emissive color
+          crystalMeshes.push(node);
+          originalEmissives.set(node, material.emissive.clone());
         }
       });
       scene.add(gltf.scene);
@@ -251,6 +281,38 @@ function animate() {
   mixers.forEach((mixer) => {
     mixer && mixer.update(delta);
   });
+
+  // === RAYCASTING (hover detection) ===
+  // Point the ray from the camera through the mouse position
+  raycaster.setFromCamera(mouse, camera);
+  // Test which crystal meshes the ray intersects (the array is sorted by distance — closest first)
+  const intersects = raycaster.intersectObjects(crystalMeshes);
+
+  if (intersects.length > 0) {
+    const hit = intersects[0].object; // closest crystal under the mouse
+
+    if (hoveredObject !== hit) {
+      // Mouse moved to a NEW crystal — restore the old one first
+      if (hoveredObject) {
+        hoveredObject.material.emissive.copy(originalEmissives.get(hoveredObject));
+        hoveredObject.scale.set(1, 1, 1);
+      }
+      // Boost the new crystal's emissive (makes it glow brighter through bloom)
+      hoveredObject = hit;
+      const boosted = originalEmissives.get(hit).clone().multiplyScalar(3);
+      hit.material.emissive.copy(boosted);
+      hit.scale.set(1.08, 1.08, 1.08);
+      document.body.style.cursor = "pointer";
+    }
+  } else {
+    // Mouse is over empty space — restore the last hovered crystal
+    if (hoveredObject) {
+      hoveredObject.material.emissive.copy(originalEmissives.get(hoveredObject));
+      hoveredObject.scale.set(1, 1, 1);
+      hoveredObject = null;
+      document.body.style.cursor = "default";
+    }
+  }
 
   controls.update();
 
