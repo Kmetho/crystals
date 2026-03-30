@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+:root {
+  --color-dark: rgb(57, 44, 94);
+}
+
+body,
+html {
+  color: var(--color-dark);
+  overflow: hidden;
+}
+
+canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: -1;
+}

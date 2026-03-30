@@ -178,6 +178,12 @@ window.addEventListener("mousemove", (event) => {
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 });
 
+window.addEventListener("touchmove", (event) => {
+  const touch = event.touches[0];
+  mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+});
+
 let audioCtx = null;
 const crystalNotes = [
   261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 587.33, 659.25,
