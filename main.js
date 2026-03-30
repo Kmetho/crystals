@@ -2,24 +2,17 @@ import "./style.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-
-// Post-processing imports
-// EffectComposer manages the chain of passes (think of it like a pipeline)
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-// RenderPass renders the scene into the pipeline (instead of directly to screen)
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-// The bloom effect itself — makes bright things glow
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-// OutputPass handles final color space conversion (sRGB etc.)
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
-// setup
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
   75,
   window.innerWidth / window.innerHeight,
   0.1,
-  1000
+  1000,
 );
 const renderer = new THREE.WebGLRenderer({
   canvas: document.querySelector("#bg"),
@@ -28,73 +21,40 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 camera.position.setZ(50);
-
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-// === POST-PROCESSING SETUP ===
-// The composer replaces renderer.render() — it runs the scene through a chain of effects
 const composer = new EffectComposer(renderer);
-
-// Step 1: Render the scene (same as before, but into the pipeline)
-const renderPass = new RenderPass(scene, camera);
-composer.addPass(renderPass);
-
-// Step 2: Bloom effect
-// Arguments: resolution (Vector2), strength, radius, threshold
-// - strength: how intense the glow is (start low, 0.4-1.5 is a good range)
-// - radius: how far the glow spreads
-// - threshold: brightness cutoff — pixels brighter than this will bloom
-//   (0 = everything blooms a bit, 1 = only pure white blooms)
-const bloomPass = new UnrealBloomPass(
-  new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.8,  // strength — visible but not overwhelming
-  0.4,  // radius
-  0.95  // threshold — very high so only the brightest emissive parts glow, white bg stays clean
+composer.addPass(new RenderPass(scene, camera));
+composer.addPass(
+  new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0.8,
+    0.4,
+    0.95,
+  ),
 );
-composer.addPass(bloomPass);
+composer.addPass(new OutputPass());
 
-// Step 3: Output pass (handles sRGB color conversion at the end)
-const outputPass = new OutputPass();
-composer.addPass(outputPass);
-
-// FogExp2(color, density) — lower density = fog kicks in further away
-// 0.05 was too thick, making nearby crystals hazy. 0.02 keeps distant fade but clears up close objects.
 scene.fog = new THREE.FogExp2(0xffffff, 0.02);
 
-// setting controls
-
 const controls = new OrbitControls(camera, renderer.domElement);
-
-controls.listenToKeyEvents(window); // optional
-
-//controls.addEventListener( 'change', render ); // call this only in static scenes (i.e., if there is no animation loop)
-
-controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
+controls.listenToKeyEvents(window);
+controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.enablePan = false;
-
 controls.screenSpacePanning = false;
-
 controls.minDistance = 16;
 controls.maxDistance = 50;
-// controls.zoomSpeed = -1;
-
 controls.maxPolarAngle = Math.PI / 2;
 
-// light
-// PointLight has a second argument: intensity (default 1). Let's keep it strong for highlights.
 const pointLight = new THREE.PointLight(0xffffff, 1);
 pointLight.position.set(5, 5, 5);
-// AmbientLight: second arg is intensity. At 1.0 it washes out metallic materials.
-// Lower values let the point light create contrast and make the crystals pop.
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.05);
 scene.add(pointLight, ambientLight);
 
-// bg
 const bg = new THREE.TextureLoader().load("/images/bg.png");
 scene.background = bg;
 
-// cubeMap texture images
 const cubeTextureLoader = new THREE.CubeTextureLoader();
 const cubeMap = cubeTextureLoader.load([
   "/images/px.png",
@@ -105,99 +65,95 @@ const cubeMap = cubeTextureLoader.load([
   "/images/nz.png",
 ]);
 
-//stars
+const stars = [];
+const starHomePositions = [];
+const starGeometry = new THREE.SphereGeometry(0.2, 6, 6);
+const starMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+starMaterial.envMap = cubeMap;
+starMaterial.envMapIntensity = 10;
+
 Array(400)
   .fill()
   .forEach(() => {
-    const geometry = new THREE.SphereGeometry(0.2, 24, 24);
-    const material = new THREE.MeshStandardMaterial({ color: 0xffffff });
-    material.envMap = cubeMap;
-    material.envMapIntensity = 10;
-    const star = new THREE.Mesh(geometry, material);
+    const star = new THREE.Mesh(starGeometry, starMaterial);
     const [x, y, z] = Array(3)
       .fill()
       .map(() => THREE.MathUtils.randFloatSpread(100));
     star.position.set(x, y, z);
     scene.add(star);
+    stars.push(star);
+    starHomePositions.push(star.position.clone());
   });
 
-// crystals
-// Crystal materials — darkened base colors so they're visible against the white bg.
-// The emissive color is what "self-illuminates" and gets picked up by bloom on hover.
+const mouseWorld = new THREE.Vector3();
+
 let materials = [
   new THREE.MeshStandardMaterial({
-    color: 0x8a85a0,     // was 0xe7e2da — too close to white
-    emissive: 0x0020ff,   // was 0x000fe7 — bumped blue for visibility
+    color: 0x4a4558,
+    emissive: 0x001099,
     roughness: 0,
     metalness: 1,
     flatShading: true,
     vertexColors: true,
     fog: true,
   }),
-
   new THREE.MeshStandardMaterial({
-    color: 0x7a8a7e,     // was 0xdfd9e2
-    emissive: 0x2a7f62,
+    color: 0x3a4a3e,
+    emissive: 0x154a35,
     roughness: 0,
     metalness: 1,
     flatShading: true,
     vertexColors: true,
     fog: true,
   }),
-
   new THREE.MeshStandardMaterial({
-    color: 0x9a7a4a,     // was 0xe7d29a
-    emissive: 0xb497d6,
+    color: 0x5a4a2a,
+    emissive: 0x6a5a80,
     roughness: 0,
     metalness: 1,
     flatShading: true,
     vertexColors: true,
     fog: true,
   }),
-
   new THREE.MeshStandardMaterial({
-    color: 0x3a9a9b,     // was 0x77feff — toned down cyan
-    emissive: 0x949494,
+    color: 0x1a5a5b,
+    emissive: 0x4a4a4a,
     roughness: 0,
     metalness: 1,
     flatShading: true,
     vertexColors: true,
     fog: true,
   }),
-
   new THREE.MeshStandardMaterial({
-    color: 0x1a00e7,     // already dark — keeping as is
-    emissive: 0x1a0a6e,   // was 0x000000 — gave it some glow so it doesn't vanish
+    color: 0x0e0080,
+    emissive: 0x0d053a,
     roughness: 0,
     metalness: 1,
     flatShading: true,
     vertexColors: true,
     fog: true,
   }),
-
   new THREE.MeshStandardMaterial({
-    color: 0x8a5a7a,     // was 0xd1b1cb
-    emissive: 0xf90093,
+    color: 0x4a2a3a,
+    emissive: 0x8a0050,
     roughness: 0,
     metalness: 1,
     flatShading: true,
     vertexColors: true,
     fog: true,
   }),
-
   new THREE.MeshStandardMaterial({
-    color: 0x9a8abf,     // was 0xfffffd — way too white
-    emissive: 0x8a00e7,
+    color: 0x5a4a70,
+    emissive: 0x4a0080,
     roughness: 0,
     metalness: 1,
     flatShading: true,
     vertexColors: true,
     fog: true,
   }),
-
   new THREE.MeshStandardMaterial({
-    color: 0x4a7a9a,     // was 0x9dc1e7
-    emissive: 0x69ddff,
+    color: 0x2a4a5a,
+    emissive: 0x3a7a90,
     roughness: 0,
     metalness: 1,
     flatShading: true,
@@ -208,35 +164,106 @@ let materials = [
 
 materials.forEach((element) => {
   element.envMap = cubeMap;
-  // envMapIntensity controls how much the cube map reflections contribute to the surface.
-  // At 1.0 with metalness=1, the reflections dominate and wash out the colors.
-  // Lowering it lets the emissive and base colors come through.
-  element.envMapIntensity = 0.4;
+  element.envMapIntensity = 0.8;
 });
 
-// === RAYCASTING SETUP ===
-// Raycaster shoots an invisible ray from the camera through the mouse position.
-// We use it to detect which crystal the user is hovering over.
 const raycaster = new THREE.Raycaster();
-// Mouse coordinates in "normalized device coordinates" (NDC):
-// x and y go from -1 to +1 (center of screen = 0,0)
-// Three.js needs this format, not pixel coordinates.
 const mouse = new THREE.Vector2();
-
-// We'll collect all crystal meshes here so raycaster knows what to test against
 const crystalMeshes = [];
-// Store original emissive colors so we can restore them after hover
 const originalEmissives = new Map();
-// Track what we're currently hovering so we know when the mouse leaves
 let hoveredObject = null;
 
 window.addEventListener("mousemove", (event) => {
-  // Convert pixel coords to NDC (-1 to +1)
-  // event.clientX goes 0 → window.innerWidth, we need -1 → +1
-  // event.clientY goes 0 (top) → window.innerHeight (bottom), but NDC y is +1 (top) → -1 (bottom)
-  // That's why we negate the y!
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+});
+
+let audioCtx = null;
+const crystalNotes = [
+  261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 587.33, 659.25,
+];
+const crystalNoteMap = new Map();
+
+function playEtherealTone(frequency) {
+  if (!audioCtx) audioCtx = new AudioContext();
+  const now = audioCtx.currentTime;
+
+  const gainNode = audioCtx.createGain();
+  gainNode.gain.setValueAtTime(0, now);
+  gainNode.gain.linearRampToValueAtTime(0.15, now + 0.1);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
+
+  const osc1 = audioCtx.createOscillator();
+  osc1.type = "sine";
+  osc1.frequency.setValueAtTime(frequency, now);
+
+  const osc2 = audioCtx.createOscillator();
+  osc2.type = "sine";
+  osc2.frequency.setValueAtTime(frequency, now);
+  osc2.detune.setValueAtTime(7, now);
+
+  const osc3 = audioCtx.createOscillator();
+  osc3.type = "sine";
+  osc3.frequency.setValueAtTime(frequency * 2, now);
+  const octaveGain = audioCtx.createGain();
+  octaveGain.gain.setValueAtTime(0.06, now);
+
+  osc1.connect(gainNode);
+  osc2.connect(gainNode);
+  osc3.connect(octaveGain);
+  octaveGain.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+
+  osc1.start(now);
+  osc2.start(now);
+  osc3.start(now);
+  osc1.stop(now + 2.0);
+  osc2.stop(now + 2.0);
+  osc3.stop(now + 2.0);
+}
+
+const activeHalos = [];
+
+function spawnHalo(crystal) {
+  const emissiveColor = originalEmissives.get(crystal);
+  const glowGeo = new THREE.SphereGeometry(3, 16, 16);
+  const glowMat = new THREE.MeshBasicMaterial({
+    color: emissiveColor,
+    transparent: true,
+    opacity: 0.15,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+
+  const halo = new THREE.Mesh(glowGeo, glowMat);
+  const worldPos = new THREE.Vector3();
+  crystal.getWorldPosition(worldPos);
+  halo.position.copy(worldPos);
+
+  scene.add(halo);
+  activeHalos.push({ mesh: halo, age: 0 });
+}
+
+function triggerCrystal(index) {
+  playEtherealTone(crystalNotes[index]);
+  const mesh = crystalMeshes.find((m) => crystalNoteMap.get(m) === index);
+  if (mesh) spawnHalo(mesh);
+}
+
+window.addEventListener("click", () => {
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(crystalMeshes);
+  if (intersects.length > 0) {
+    const hit = intersects[0].object;
+    const noteIndex = crystalNoteMap.get(hit);
+    if (noteIndex !== undefined) triggerCrystal(noteIndex);
+  }
+});
+
+const keyMap = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 7 };
+window.addEventListener("keydown", (event) => {
+  const index = keyMap[event.key];
+  if (index !== undefined) triggerCrystal(index);
 });
 
 let crystals = ["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"];
@@ -251,9 +278,9 @@ crystals.forEach((element, index) => {
       gltf.scene.traverse(function (node) {
         if (node.isMesh) {
           node.material = material;
-          // Collect this mesh for raycasting and save its original emissive color
           crystalMeshes.push(node);
           originalEmissives.set(node, material.emissive.clone());
+          crystalNoteMap.set(node, index);
         }
       });
       scene.add(gltf.scene);
@@ -261,18 +288,14 @@ crystals.forEach((element, index) => {
       let clips = gltf.animations;
       let clip = THREE.AnimationClip.findByName(clips, element + "-action");
       mixers[index].clipAction(clip).play();
-      console.log(mixers[index]);
     },
     undefined,
     function (error) {
       console.error(error);
-    }
+    },
   );
 });
 
-// loop
-// THREE.Clock is deprecated in newer Three.js — THREE.Timer is the replacement
-// Timer is more precise and doesn't auto-start, giving you more control
 const timer = new THREE.Timer();
 function animate() {
   requestAnimationFrame(animate);
@@ -282,32 +305,70 @@ function animate() {
     mixer && mixer.update(delta);
   });
 
-  // === RAYCASTING (hover detection) ===
-  // Point the ray from the camera through the mouse position
+  for (let i = activeHalos.length - 1; i >= 0; i--) {
+    const halo = activeHalos[i];
+    halo.age += delta;
+    const progress = halo.age / 1.5;
+
+    if (progress >= 1) {
+      scene.remove(halo.mesh);
+      halo.mesh.geometry.dispose();
+      halo.mesh.material.dispose();
+      activeHalos.splice(i, 1);
+    } else {
+      const scale = 1 + progress * 1.5;
+      halo.mesh.scale.set(scale, scale, scale);
+      halo.mesh.material.opacity =
+        0.15 * ((1 + Math.cos(progress * Math.PI)) / 2);
+    }
+  }
+
+  mouseWorld.set(mouse.x, mouse.y, 0.5).unproject(camera);
+  const pushRadius = 15;
+  const pushRadiusSq = pushRadius * pushRadius;
+
+  for (let i = 0; i < stars.length; i++) {
+    const star = stars[i];
+    const home = starHomePositions[i];
+    const dx = star.position.x - mouseWorld.x;
+    const dy = star.position.y - mouseWorld.y;
+    const dz = star.position.z - mouseWorld.z;
+    const distSq = dx * dx + dy * dy + dz * dz;
+
+    if (distSq < pushRadiusSq) {
+      const dist = Math.sqrt(distSq);
+      const strength = ((pushRadius - dist) / pushRadius) * 0.3;
+      star.position.x += (dx / dist) * strength;
+      star.position.y += (dy / dist) * strength;
+      star.position.z += (dz / dist) * strength;
+    } else {
+      star.position.lerp(home, 0.02);
+    }
+  }
+
   raycaster.setFromCamera(mouse, camera);
-  // Test which crystal meshes the ray intersects (the array is sorted by distance — closest first)
   const intersects = raycaster.intersectObjects(crystalMeshes);
 
   if (intersects.length > 0) {
-    const hit = intersects[0].object; // closest crystal under the mouse
-
+    const hit = intersects[0].object;
     if (hoveredObject !== hit) {
-      // Mouse moved to a NEW crystal — restore the old one first
       if (hoveredObject) {
-        hoveredObject.material.emissive.copy(originalEmissives.get(hoveredObject));
+        hoveredObject.material.emissive.copy(
+          originalEmissives.get(hoveredObject),
+        );
         hoveredObject.scale.set(1, 1, 1);
       }
-      // Boost the new crystal's emissive (makes it glow brighter through bloom)
       hoveredObject = hit;
       const boosted = originalEmissives.get(hit).clone().multiplyScalar(3);
       hit.material.emissive.copy(boosted);
-      hit.scale.set(1.08, 1.08, 1.08);
+      hit.scale.set(1.03, 1.03, 1.03);
       document.body.style.cursor = "pointer";
     }
   } else {
-    // Mouse is over empty space — restore the last hovered crystal
     if (hoveredObject) {
-      hoveredObject.material.emissive.copy(originalEmissives.get(hoveredObject));
+      hoveredObject.material.emissive.copy(
+        originalEmissives.get(hoveredObject),
+      );
       hoveredObject.scale.set(1, 1, 1);
       hoveredObject = null;
       document.body.style.cursor = "default";
@@ -315,8 +376,6 @@ function animate() {
   }
 
   controls.update();
-
-  // Use the composer instead of renderer directly — this runs the bloom pipeline
   composer.render();
 }
 
@@ -325,6 +384,5 @@ window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  // The composer also needs to know about the new size, otherwise bloom renders at the old resolution
   composer.setSize(window.innerWidth, window.innerHeight);
 });
